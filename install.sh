@@ -2,6 +2,15 @@
 
 set -e
 
+cat << 'EOF'
+                        _
+   ___  __ _ ___ _   _ | |_ _ __ ___  ___
+  / _ \/ _` / __| | | || __| '__/ _ \/ _ \
+ |  __/ (_| \__ \ |_| || |_| | |  __/  __/
+  \___|\__,_|___/\__, | \__|_|  \___|\___|
+                 |___/
+EOF
+
 REPO="saeeddhqan/easytree"
 BRANCH="main"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
