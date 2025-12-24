@@ -2,9 +2,6 @@
 
 A simple CLI tool for managing git worktrees.
 
-![easytree](https://github.com/user-attachments/assets/0eb8d4ca-94d9-4e57-8072-b0ebd9e38660)
-
-
 ## Installation
 
 ```bash
