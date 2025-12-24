@@ -11,7 +11,7 @@ cat << 'EOF'
                  |___/
 EOF
 
-REPO="saeeddhqan/easytree"
+REPO="saeedvaziry/easytree"
 BRANCH="main"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 INSTALL_NAME="easytree"

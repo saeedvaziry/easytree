@@ -5,12 +5,12 @@ A simple CLI tool for managing git worktrees.
 ## Installation
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/saeeddhqan/easytree/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/saeedvaziry/easytree/main/install.sh | bash
 ```
 
 Custom install directory:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/saeeddhqan/easytree/main/install.sh | INSTALL_DIR=/usr/local/bin bash
+curl -fsSL https://raw.githubusercontent.com/saeedvaziry/easytree/main/install.sh | INSTALL_DIR=/usr/local/bin bash
 ```
 
 ## Usage
