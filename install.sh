@@ -32,53 +32,6 @@ if command -v easytree &> /dev/null; then
     fi
 fi
 
-# Find writable directories in PATH
-get_writable_paths() {
-    local paths=()
-    IFS=':' read -ra PATH_DIRS <<< "$PATH"
-
-    for dir in "${PATH_DIRS[@]}"; do
-        # Skip empty entries
-        [[ -z "$dir" ]] && continue
-
-        # Check if directory exists and is writable
-        if [[ -d "$dir" && -w "$dir" ]]; then
-            # Avoid duplicates
-            local is_duplicate=false
-            for existing in "${paths[@]}"; do
-                if [[ "$existing" == "$dir" ]]; then
-                    is_duplicate=true
-                    break
-                fi
-            done
-
-            if [[ "$is_duplicate" == false ]]; then
-                paths+=("$dir")
-            fi
-        fi
-    done
-
-    # Also suggest common paths that might not exist yet but can be created
-    for suggested in "$HOME/.local/bin" "$HOME/bin"; do
-        local parent_dir=$(dirname "$suggested")
-        if [[ -d "$parent_dir" && -w "$parent_dir" ]]; then
-            local is_duplicate=false
-            for existing in "${paths[@]}"; do
-                if [[ "$existing" == "$suggested" ]]; then
-                    is_duplicate=true
-                    break
-                fi
-            done
-
-            if [[ "$is_duplicate" == false ]]; then
-                paths+=("$suggested")
-            fi
-        fi
-    done
-
-    printf '%s\n' "${paths[@]}"
-}
-
 # Download the script
 download_script() {
     local dest="$1"
@@ -117,23 +70,31 @@ easytree() {
 '
 
     SHELL_RC=""
-    if [[ -n "$ZSH_VERSION" ]] || [[ "$SHELL" == */zsh ]]; then
+    if [[ "$SHELL" == */zsh ]]; then
         SHELL_RC="$HOME/.zshrc"
-    elif [[ -n "$BASH_VERSION" ]] || [[ "$SHELL" == */bash ]]; then
+    elif [[ "$SHELL" == */bash ]]; then
         SHELL_RC="$HOME/.bashrc"
     fi
 
-    if [[ -n "$SHELL_RC" ]]; then
+    if [[ -n "$SHELL_RC" && -f "$SHELL_RC" ]]; then
         # Remove old easytree function if exists (for updates)
-        if grep -q "^easytree()" "$SHELL_RC" 2>/dev/null; then
-            # Create temp file without old function
-            local temp_file=$(mktemp)
-            awk '/^# easytree - git worktree manager$/,/^}$/{next}1' "$SHELL_RC" > "$temp_file"
-            # Also remove any standalone easytree() function
-            awk '/^easytree\(\) \{$/,/^}$/{next}1' "$temp_file" > "$SHELL_RC"
-            rm -f "$temp_file"
+        if grep -q "easytree()" "$SHELL_RC" 2>/dev/null; then
+            temp_file=$(mktemp)
+            awk '
+                /^# easytree - git worktree manager$/ { skip=1; next }
+                /^easytree\(\) \{$/ { skip=1; next }
+                skip && /^\}$/ { skip=0; next }
+                !skip { print }
+            ' "$SHELL_RC" > "$temp_file"
+            mv "$temp_file" "$SHELL_RC"
         fi
 
+        echo "" >> "$SHELL_RC"
+        echo "$SHELL_FUNCTION" >> "$SHELL_RC"
+        echo "Shell function added to $SHELL_RC"
+        echo ""
+        echo "Restart your shell or run: source $SHELL_RC"
+    elif [[ -n "$SHELL_RC" ]]; then
         echo "" >> "$SHELL_RC"
         echo "$SHELL_FUNCTION" >> "$SHELL_RC"
         echo "Shell function added to $SHELL_RC"
@@ -146,15 +107,47 @@ easytree() {
     fi
 }
 
+# Collect writable paths
+collect_paths() {
+    AVAILABLE_PATHS=()
+    local seen=""
+
+    # Check directories in PATH
+    IFS=':' read -ra PATH_DIRS <<< "$PATH"
+    for dir in "${PATH_DIRS[@]}"; do
+        [[ -z "$dir" ]] && continue
+        [[ -d "$dir" && -w "$dir" ]] || continue
+
+        # Check for duplicates
+        case "$seen" in
+            *"|$dir|"*) continue ;;
+        esac
+        seen="$seen|$dir|"
+        AVAILABLE_PATHS+=("$dir")
+    done
+
+    # Add common paths if writable
+    for suggested in "$HOME/.local/bin" "$HOME/bin"; do
+        parent_dir=$(dirname "$suggested")
+        if [[ -d "$parent_dir" && -w "$parent_dir" ]]; then
+            case "$seen" in
+                *"|$suggested|"*) continue ;;
+            esac
+            seen="$seen|$suggested|"
+            AVAILABLE_PATHS+=("$suggested")
+        fi
+    done
+}
+
 # Handle update
 if [[ -n "$EXISTING_INSTALL" && -f "$EXISTING_INSTALL" ]]; then
     echo ""
     echo "easytree is already installed at: $EXISTING_INSTALL"
     echo ""
-    read -p "Do you want to update it? [Y/n] " -n 1 -r
-    echo ""
+    printf "Do you want to update it? [Y/n] "
+    read -r REPLY < /dev/tty
 
-    if [[ $REPLY =~ ^[Nn]$ ]]; then
+    if [[ "$REPLY" =~ ^[Nn]$ ]]; then
         echo "Update cancelled."
         exit 0
     fi
@@ -172,12 +165,13 @@ echo ""
 echo "Finding available installation paths..."
 echo ""
 
-mapfile -t AVAILABLE_PATHS < <(get_writable_paths)
+collect_paths
 
 if [[ ${#AVAILABLE_PATHS[@]} -eq 0 ]]; then
     echo "No writable directories found in PATH."
     echo ""
-    read -p "Enter a custom installation path: " CUSTOM_PATH
+    printf "Enter a custom installation path: "
+    read -r CUSTOM_PATH < /dev/tty
 
     if [[ -z "$CUSTOM_PATH" ]]; then
         echo "Error: No path provided"
@@ -189,8 +183,9 @@ else
     echo "Available installation paths:"
     echo ""
 
-    for i in "${!AVAILABLE_PATHS[@]}"; do
-        path="${AVAILABLE_PATHS[$i]}"
+    i=0
+    for path in "${AVAILABLE_PATHS[@]}"; do
+        i=$((i + 1))
         in_path=""
         if [[ ":$PATH:" == *":$path:"* ]]; then
             in_path=" (in PATH)"
@@ -202,7 +197,7 @@ else
             in_path="$in_path (will be created)"
         fi
 
-        echo "  $((i + 1))) $path$in_path"
+        echo "  $i) $path$in_path"
     done
 
     echo ""
@@ -210,11 +205,13 @@ else
     echo ""
 
     while true; do
-        read -p "Select installation path [1]: " choice
+        printf "Select installation path [1]: "
+        read -r choice < /dev/tty
         choice=${choice:-1}
 
         if [[ "$choice" == "0" ]]; then
-            read -p "Enter custom path: " CUSTOM_PATH
+            printf "Enter custom path: "
+            read -r CUSTOM_PATH < /dev/tty
             if [[ -z "$CUSTOM_PATH" ]]; then
                 echo "Error: No path provided"
                 continue
