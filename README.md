@@ -8,29 +8,22 @@ A simple CLI tool for managing git worktrees.
 curl -fsSL https://raw.githubusercontent.com/saeedvaziry/easytree/main/install.sh | bash
 ```
 
-Custom install directory:
-```bash
-curl -fsSL https://raw.githubusercontent.com/saeedvaziry/easytree/main/install.sh | INSTALL_DIR=/usr/local/bin bash
-```
+The installer sets up a shell function that auto-navigates to worktrees after `create`, `open`, and `rm` commands.
 
 ## Usage
 
 ```bash
-easytree create <name>    # Create a new worktree
+easytree init             # Create .easytree.json config file
+easytree create <name>    # Create a new worktree (auto-cd)
 easytree ls               # List all worktrees
-easytree open <name>      # Print worktree path
-easytree rm <name>        # Remove a worktree
-```
-
-Navigate to a worktree:
-```bash
-cd $(easytree create feature-login)
-cd $(easytree open feature-login)
+easytree open <name>      # Navigate to a worktree
+easytree rm [name]        # Remove a worktree (name optional if inside one)
+easytree uninstall        # Uninstall easytree
 ```
 
 ## Configuration
 
-Create `.easytree.json` in your project root to run setup scripts automatically:
+Run `easytree init` or create `.easytree.json` in your project root to run setup scripts automatically:
 
 ```json
 {
@@ -46,7 +39,3 @@ Create `.easytree.json` in your project root to run setup scripts automatically:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `EASYTREE_PATH` | Base directory for worktrees | `~/.easytree` |
-
-```bash
-EASYTREE_PATH=/custom/path easytree create feature-login
-```
