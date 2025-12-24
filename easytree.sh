@@ -18,10 +18,10 @@ show_usage() {
     echo "  EASYTREE_PATH    Base directory for worktrees (default: ~/.easytree)"
     echo ""
     echo "Examples:"
-    echo "  cd \$($SCRIPT_NAME create feature-login)   # Create and navigate"
-    echo "  $SCRIPT_NAME ls"
-    echo "  cd \$($SCRIPT_NAME open feature-login)     # Navigate to worktree"
-    echo "  $SCRIPT_NAME rm feature-login"
+    echo "  $SCRIPT_NAME create feature-login    # Create and navigate to worktree"
+    echo "  $SCRIPT_NAME ls                      # List worktrees"
+    echo "  $SCRIPT_NAME open feature-login      # Navigate to existing worktree"
+    echo "  $SCRIPT_NAME rm feature-login        # Remove worktree"
     echo "  EASYTREE_PATH=/custom/path $SCRIPT_NAME create feature-login"
 }
 
