@@ -87,6 +87,9 @@ cmd_create() {
 
     mkdir -p "$PROJECT_WORKTREES_DIR"
 
+    # Clean up stale worktree references (e.g., directory was manually deleted)
+    git worktree prune 2>/dev/null
+
     if [ -d "$WORKTREE_PATH" ]; then
         echo "Error: Worktree already exists at $WORKTREE_PATH" >&2
         exit 1
@@ -94,7 +97,12 @@ cmd_create() {
 
     echo "Creating worktree '$WORKTREE_NAME' at $WORKTREE_PATH..." >&2
 
-    git worktree add -b "$WORKTREE_NAME" "$WORKTREE_PATH" >&2
+    # Check if branch already exists and use it, otherwise create new branch
+    if git show-ref --verify --quiet "refs/heads/$WORKTREE_NAME"; then
+        git worktree add "$WORKTREE_PATH" "$WORKTREE_NAME" >&2
+    else
+        git worktree add -b "$WORKTREE_NAME" "$WORKTREE_PATH" >&2
+    fi
 
     echo "Worktree created successfully!" >&2
 
@@ -152,8 +160,8 @@ cmd_ls() {
 
 cmd_open() {
     if [ -z "$1" ]; then
-        echo "Error: Worktree name required"
-        echo "Usage: $SCRIPT_NAME open <name>"
+        echo "Error: Worktree name required" >&2
+        echo "Usage: $SCRIPT_NAME open <name>" >&2
         exit 1
     fi
 
@@ -161,7 +169,7 @@ cmd_open() {
     WORKTREE_PATH="$PROJECT_WORKTREES_DIR/$WORKTREE_NAME"
 
     if [ ! -d "$WORKTREE_PATH" ]; then
-        echo "Error: Worktree '$WORKTREE_NAME' does not exist"
+        echo "Error: Worktree '$WORKTREE_NAME' does not exist" >&2
         exit 1
     fi
 
