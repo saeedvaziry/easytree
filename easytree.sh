@@ -1,0 +1,186 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT_NAME=$(basename "$0")
+WORKTREES_BASE="${EASYTREE_PATH:-$HOME/.easytree}"
+
+show_usage() {
+    echo "Usage: $SCRIPT_NAME <command> [arguments]"
+    echo ""
+    echo "Commands:"
+    echo "  create <name>    Create a new worktree with the given name"
+    echo "  ls               List all worktrees for the current project"
+    echo "  open <name>      Print the path to navigate to the given worktree"
+    echo "  rm <name>        Remove the specified worktree"
+    echo ""
+    echo "Environment Variables:"
+    echo "  EASYTREE_PATH    Base directory for worktrees (default: ~/.easytree)"
+    echo ""
+    echo "Examples:"
+    echo "  $SCRIPT_NAME create feature-login    # Create and navigate to worktree"
+    echo "  $SCRIPT_NAME ls                      # List worktrees"
+    echo "  $SCRIPT_NAME open feature-login      # Navigate to existing worktree"
+    echo "  $SCRIPT_NAME rm feature-login        # Remove worktree"
+    echo "  EASYTREE_PATH=/custom/path $SCRIPT_NAME create feature-login"
+}
+
+ensure_git_repo() {
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        echo "Error: Not inside a git repository"
+        exit 1
+    fi
+}
+
+get_project_info() {
+    PROJECT_PATH=$(git rev-parse --show-toplevel)
+    PROJECT_NAME=$(basename "$PROJECT_PATH")
+    PROJECT_WORKTREES_DIR="$WORKTREES_BASE/$PROJECT_NAME"
+}
+
+cmd_create() {
+    if [ -z "$1" ]; then
+        echo "Error: Worktree name required" >&2
+        echo "Usage: $SCRIPT_NAME create <name>" >&2
+        exit 1
+    fi
+
+    WORKTREE_NAME="$1"
+    WORKTREE_PATH="$PROJECT_WORKTREES_DIR/$WORKTREE_NAME"
+
+    mkdir -p "$PROJECT_WORKTREES_DIR"
+
+    if [ -d "$WORKTREE_PATH" ]; then
+        echo "Error: Worktree already exists at $WORKTREE_PATH" >&2
+        exit 1
+    fi
+
+    echo "Creating worktree '$WORKTREE_NAME' at $WORKTREE_PATH..." >&2
+
+    git worktree add -b "$WORKTREE_NAME" "$WORKTREE_PATH" >&2
+
+    echo "Worktree created successfully!" >&2
+
+    WORKTREE_CONFIG="$PROJECT_PATH/.easytree.json"
+
+    if [ -f "$WORKTREE_CONFIG" ]; then
+        echo "Found .easytree.json, running setup scripts..." >&2
+
+        cd "$WORKTREE_PATH"
+
+        export PROJECT_PATH
+
+        SCRIPTS=$(jq -r '.scripts[]' "$WORKTREE_CONFIG" 2>/dev/null)
+
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to parse .worktree.json" >&2
+            exit 1
+        fi
+
+        while IFS= read -r script; do
+            if [ -n "$script" ]; then
+                echo "Running: $script" >&2
+                eval "$script" >&2
+            fi
+        done <<< "$SCRIPTS"
+
+        echo "Setup complete!" >&2
+    else
+        echo "No .easytree.json found, skipping setup scripts." >&2
+    fi
+
+    echo "" >&2
+    echo "Worktree ready at: $WORKTREE_PATH" >&2
+
+    # Output path to stdout for cd capture
+    echo "$WORKTREE_PATH"
+}
+
+cmd_ls() {
+    if [ ! -d "$PROJECT_WORKTREES_DIR" ]; then
+        echo "No worktrees found for project '$PROJECT_NAME'"
+        exit 0
+    fi
+
+    echo "Worktrees for '$PROJECT_NAME':"
+    echo ""
+
+    for dir in "$PROJECT_WORKTREES_DIR"/*/; do
+        if [ -d "$dir" ]; then
+            name=$(basename "$dir")
+            echo "  $name"
+        fi
+    done
+}
+
+cmd_open() {
+    if [ -z "$1" ]; then
+        echo "Error: Worktree name required"
+        echo "Usage: $SCRIPT_NAME open <name>"
+        exit 1
+    fi
+
+    WORKTREE_NAME="$1"
+    WORKTREE_PATH="$PROJECT_WORKTREES_DIR/$WORKTREE_NAME"
+
+    if [ ! -d "$WORKTREE_PATH" ]; then
+        echo "Error: Worktree '$WORKTREE_NAME' does not exist"
+        exit 1
+    fi
+
+    echo "$WORKTREE_PATH"
+}
+
+cmd_rm() {
+    if [ -z "$1" ]; then
+        echo "Error: Worktree name required"
+        echo "Usage: $SCRIPT_NAME rm <name>"
+        exit 1
+    fi
+
+    WORKTREE_NAME="$1"
+    WORKTREE_PATH="$PROJECT_WORKTREES_DIR/$WORKTREE_NAME"
+
+    if [ ! -d "$WORKTREE_PATH" ]; then
+        echo "Error: Worktree '$WORKTREE_NAME' does not exist"
+        exit 1
+    fi
+
+    echo "Removing worktree '$WORKTREE_NAME'..."
+
+    git worktree remove "$WORKTREE_PATH"
+
+    if git show-ref --verify --quiet "refs/heads/$WORKTREE_NAME"; then
+        echo "Deleting branch '$WORKTREE_NAME'..."
+        git branch -d "$WORKTREE_NAME" 2>/dev/null || git branch -D "$WORKTREE_NAME"
+    fi
+
+    echo "Worktree '$WORKTREE_NAME' removed successfully!"
+}
+
+# Main
+if [ -z "$1" ]; then
+    show_usage
+    exit 1
+fi
+
+COMMAND="$1"
+shift
+
+case "$COMMAND" in
+    create|ls|open|rm)
+        ensure_git_repo
+        get_project_info
+        "cmd_$COMMAND" "$@"
+        ;;
+    -h|--help|help)
+        show_usage
+        exit 0
+        ;;
+    *)
+        echo "Error: Unknown command '$COMMAND'"
+        echo ""
+        show_usage
+        exit 1
+        ;;
+esac
