@@ -11,8 +11,9 @@ show_usage() {
     echo "Commands:"
     echo "  create <name>    Create a new worktree with the given name"
     echo "  ls               List all worktrees for the current project"
-    echo "  open <name>      Print the path to navigate to the given worktree"
+    echo "  open <name>      Navigate to the given worktree"
     echo "  rm <name>        Remove the specified worktree"
+    echo "  uninstall        Uninstall easytree from your system"
     echo ""
     echo "Environment Variables:"
     echo "  EASYTREE_PATH    Base directory for worktrees (default: ~/.easytree)"
@@ -158,6 +159,65 @@ cmd_rm() {
     echo "Worktree '$WORKTREE_NAME' removed successfully!"
 }
 
+cmd_uninstall() {
+    echo "Uninstalling easytree..."
+    echo ""
+
+    SCRIPT_PATH=$(realpath "$0")
+
+    # Detect shell rc file
+    SHELL_RC=""
+    if [[ -n "$ZSH_VERSION" ]] || [[ "$SHELL" == */zsh ]]; then
+        SHELL_RC="$HOME/.zshrc"
+    elif [[ -n "$BASH_VERSION" ]] || [[ "$SHELL" == */bash ]]; then
+        SHELL_RC="$HOME/.bashrc"
+    fi
+
+    # Remove shell function from rc file
+    if [[ -n "$SHELL_RC" && -f "$SHELL_RC" ]]; then
+        if grep -q "easytree()" "$SHELL_RC" 2>/dev/null; then
+            echo "Removing shell function from $SHELL_RC..."
+            temp_file=$(mktemp)
+            awk '
+                /^# easytree - git worktree manager$/ { skip=1; next }
+                /^easytree\(\) \{$/ { skip=1; next }
+                skip && /^\}$/ { skip=0; next }
+                !skip { print }
+            ' "$SHELL_RC" > "$temp_file"
+            mv "$temp_file" "$SHELL_RC"
+            echo "Shell function removed."
+        fi
+    fi
+
+    # Ask about removing worktree data
+    if [[ -d "$WORKTREES_BASE" ]]; then
+        echo ""
+        echo "Worktree data found at: $WORKTREES_BASE"
+        read -p "Do you want to remove all worktree data? [y/N] " -n 1 -r
+        echo ""
+
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "Removing worktree data..."
+            rm -rf "$WORKTREES_BASE"
+            echo "Worktree data removed."
+        else
+            echo "Keeping worktree data."
+        fi
+    fi
+
+    # Remove the script itself
+    echo ""
+    echo "Removing easytree script from $SCRIPT_PATH..."
+    rm -f "$SCRIPT_PATH"
+
+    echo ""
+    echo "easytree has been uninstalled."
+    if [[ -n "$SHELL_RC" ]]; then
+        echo ""
+        echo "Please restart your shell or run: source $SHELL_RC"
+    fi
+}
+
 # Main
 if [ -z "$1" ]; then
     show_usage
@@ -172,6 +232,9 @@ case "$COMMAND" in
         ensure_git_repo
         get_project_info
         "cmd_$COMMAND" "$@"
+        ;;
+    uninstall)
+        cmd_uninstall
         ;;
     -h|--help|help)
         show_usage
