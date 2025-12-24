@@ -55,7 +55,7 @@ setup_shell_function() {
     SHELL_FUNCTION='
 # easytree - git worktree manager
 easytree() {
-    if [[ "$1" == "create" || "$1" == "open" ]]; then
+    if [[ "$1" == "create" || "$1" == "open" || "$1" == "rm" ]]; then
         local result
         result=$("'"$install_path"'" "$@")
         local exit_code=$?

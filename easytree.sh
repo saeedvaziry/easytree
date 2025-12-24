@@ -12,7 +12,7 @@ show_usage() {
     echo "  create <name>    Create a new worktree with the given name"
     echo "  ls               List all worktrees for the current project"
     echo "  open <name>      Navigate to the given worktree"
-    echo "  rm <name>        Remove the specified worktree"
+    echo "  rm [name]        Remove the specified worktree (or current if inside one)"
     echo "  uninstall        Uninstall easytree from your system"
     echo ""
     echo "Environment Variables:"
@@ -23,6 +23,7 @@ show_usage() {
     echo "  $SCRIPT_NAME ls                      # List worktrees"
     echo "  $SCRIPT_NAME open feature-login      # Navigate to existing worktree"
     echo "  $SCRIPT_NAME rm feature-login        # Remove worktree"
+    echo "  $SCRIPT_NAME rm                      # Remove current worktree and navigate back"
     echo "  EASYTREE_PATH=/custom/path $SCRIPT_NAME create feature-login"
 }
 
@@ -34,7 +35,18 @@ ensure_git_repo() {
 }
 
 get_project_info() {
-    PROJECT_PATH=$(git rev-parse --show-toplevel)
+    # Get the common git directory (works for both main repo and worktrees)
+    GIT_COMMON_DIR=$(git rev-parse --git-common-dir)
+
+    # If we're in a worktree, git-common-dir points to main repo's .git
+    # If we're in main repo, it just returns .git
+    if [[ "$GIT_COMMON_DIR" == ".git" ]]; then
+        PROJECT_PATH=$(git rev-parse --show-toplevel)
+    else
+        # Remove the .git suffix to get the project path
+        PROJECT_PATH=$(dirname "$GIT_COMMON_DIR")
+    fi
+
     PROJECT_NAME=$(basename "$PROJECT_PATH")
     PROJECT_WORKTREES_DIR="$WORKTREES_BASE/$PROJECT_NAME"
 }
@@ -133,30 +145,53 @@ cmd_open() {
 }
 
 cmd_rm() {
+    CURRENT_DIR=$(pwd)
+    NAVIGATE_BACK=""
+
     if [ -z "$1" ]; then
-        echo "Error: Worktree name required"
-        echo "Usage: $SCRIPT_NAME rm <name>"
-        exit 1
+        # Check if current directory is a worktree
+        if [[ "$CURRENT_DIR" == "$PROJECT_WORKTREES_DIR/"* ]]; then
+            # Extract worktree name from current path
+            RELATIVE_PATH="${CURRENT_DIR#$PROJECT_WORKTREES_DIR/}"
+            WORKTREE_NAME="${RELATIVE_PATH%%/*}"
+            NAVIGATE_BACK="$PROJECT_PATH"
+        else
+            echo "Error: Worktree name required (or run from within a worktree)" >&2
+            echo "Usage: $SCRIPT_NAME rm [name]" >&2
+            exit 1
+        fi
+    else
+        WORKTREE_NAME="$1"
     fi
 
-    WORKTREE_NAME="$1"
     WORKTREE_PATH="$PROJECT_WORKTREES_DIR/$WORKTREE_NAME"
 
     if [ ! -d "$WORKTREE_PATH" ]; then
-        echo "Error: Worktree '$WORKTREE_NAME' does not exist"
+        echo "Error: Worktree '$WORKTREE_NAME' does not exist" >&2
         exit 1
     fi
 
-    echo "Removing worktree '$WORKTREE_NAME'..."
+    # If we're inside the worktree being removed, we need to navigate out first
+    if [[ "$CURRENT_DIR" == "$WORKTREE_PATH"* ]]; then
+        NAVIGATE_BACK="$PROJECT_PATH"
+        cd "$PROJECT_PATH"
+    fi
+
+    echo "Removing worktree '$WORKTREE_NAME'..." >&2
 
     git worktree remove "$WORKTREE_PATH"
 
     if git show-ref --verify --quiet "refs/heads/$WORKTREE_NAME"; then
-        echo "Deleting branch '$WORKTREE_NAME'..."
+        echo "Deleting branch '$WORKTREE_NAME'..." >&2
         git branch -d "$WORKTREE_NAME" 2>/dev/null || git branch -D "$WORKTREE_NAME"
     fi
 
-    echo "Worktree '$WORKTREE_NAME' removed successfully!"
+    echo "Worktree '$WORKTREE_NAME' removed successfully!" >&2
+
+    # Output path for shell wrapper to navigate back
+    if [ -n "$NAVIGATE_BACK" ]; then
+        echo "$NAVIGATE_BACK"
+    fi
 }
 
 cmd_uninstall() {
