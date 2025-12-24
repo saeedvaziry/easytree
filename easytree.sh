@@ -9,6 +9,7 @@ show_usage() {
     echo "Usage: $SCRIPT_NAME <command> [arguments]"
     echo ""
     echo "Commands:"
+    echo "  init             Initialize .easytree.json in the current project"
     echo "  create <name>    Create a new worktree with the given name"
     echo "  ls               List all worktrees for the current project"
     echo "  open <name>      Navigate to the given worktree"
@@ -19,6 +20,7 @@ show_usage() {
     echo "  EASYTREE_PATH    Base directory for worktrees (default: ~/.easytree)"
     echo ""
     echo "Examples:"
+    echo "  $SCRIPT_NAME init                    # Initialize .easytree.json config"
     echo "  $SCRIPT_NAME create feature-login    # Create and navigate to worktree"
     echo "  $SCRIPT_NAME ls                      # List worktrees"
     echo "  $SCRIPT_NAME open feature-login      # Navigate to existing worktree"
@@ -49,6 +51,28 @@ get_project_info() {
 
     PROJECT_NAME=$(basename "$PROJECT_PATH")
     PROJECT_WORKTREES_DIR="$WORKTREES_BASE/$PROJECT_NAME"
+}
+
+cmd_init() {
+    CONFIG_FILE="$PROJECT_PATH/.easytree.json"
+
+    if [ -f "$CONFIG_FILE" ]; then
+        echo "Error: .easytree.json already exists at $CONFIG_FILE"
+        exit 1
+    fi
+
+    cat > "$CONFIG_FILE" << 'EOF'
+{
+  "scripts": [
+  ]
+}
+EOF
+
+    echo "Created .easytree.json at $CONFIG_FILE"
+    echo ""
+    echo "Add setup scripts to run when creating new worktrees."
+    echo "Example:"
+    echo '  {"scripts": ["npm install", "cp $PROJECT_PATH/.env .env"]}'
 }
 
 cmd_create() {
@@ -263,7 +287,7 @@ COMMAND="$1"
 shift
 
 case "$COMMAND" in
-    create|ls|open|rm)
+    init|create|ls|open|rm)
         ensure_git_repo
         get_project_info
         "cmd_$COMMAND" "$@"
